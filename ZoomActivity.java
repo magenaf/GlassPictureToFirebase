@@ -8,10 +8,12 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 import android.app.Activity;
+import android.app.Service;
 import android.content.Intent;
 import android.hardware.Camera;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.KeyEvent;
@@ -42,7 +44,7 @@ public class ZoomActivity extends Activity implements GestureDetector.OnGestureL
 
 
     /** Create a File for saving an image or video */
-    private static File getOutputMediaFile(int type){
+    private static File getOutputMediaFile(){
         // To be safe, you should check that the SDCard is mounted
         // using Environment.getExternalStorageState() before doing this.
 
@@ -61,21 +63,12 @@ public class ZoomActivity extends Activity implements GestureDetector.OnGestureL
 
         // Create a media file name
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        File mediaFile;
-        if (type == MEDIA_TYPE_IMAGE){
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator +
+        File mediaFile = new File(mediaStorageDir.getPath() + File.separator +
                     "IMG_"+ timeStamp + ".jpg");
-
-
-        } else if(type == MEDIA_TYPE_VIDEO) {
-            mediaFile = new File(mediaStorageDir.getPath() + File.separator +
-                    "VID_"+ timeStamp + ".mp4");
-        } else {
-            return null;
-        }
 
         return mediaFile;
     }
+
 
 
     @Override
@@ -273,7 +266,7 @@ public class ZoomActivity extends Activity implements GestureDetector.OnGestureL
     Camera.PictureCallback mjpeg = new Camera.PictureCallback() {
         public void onPictureTaken(byte[] data, Camera camera) {
             // copied from http://developer.android.com/guide/topics/media/camera.html#custom-camera
-            File pictureFile = getOutputMediaFile(MEDIA_TYPE_IMAGE);
+            File pictureFile = getOutputMediaFile();
             if (pictureFile == null){
                 Log.v(TAG, "Error creating media file, check storage permissions: ");
                 return;

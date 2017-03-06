@@ -4,9 +4,6 @@ package com.example.magena.glasspicturetofirebase;
  * Created by Magena on 3/5/2017.
  */
 
-import android.os.FileObserver;
-import android.provider.MediaStore;
-
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -24,26 +21,10 @@ import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.TextView;
 
-import com.example.magena.glasspicturetofirebase.card.EmbeddedCardLayoutActivity;
-import com.example.magena.glasspicturetofirebase.opengl.OpenGlService;
-import com.example.magena.glasspicturetofirebase.slider.SliderActivity;
-import com.example.magena.glasspicturetofirebase.theming.TextAppearanceActivity;
-import com.example.magena.glasspicturetofirebase.touchpad.SelectGestureDemoActivity;
-import com.example.magena.glasspicturetofirebase.voicemenu.VoiceMenuActivity;
-import com.google.android.glass.content.Intents;
+import com.example.magena.glasspicturetofirebase.card.CardAdapter;
 import com.google.android.glass.media.Sounds;
 import com.google.android.glass.widget.CardBuilder;
-import com.google.android.glass.widget.CardScrollAdapter;
 import com.google.android.glass.widget.CardScrollView;
-
-import com.example.magena.glasspicturetofirebase.card.CardAdapter;
-import com.example.magena.glasspicturetofirebase.card.CardBuilderActivity;
-import com.example.magena.glasspicturetofirebase.card.CardScrollViewActivity;
-
-import com.google.firebase.storage.FirebaseStorage;
-import com.google.firebase.storage.OnProgressListener;
-import com.google.firebase.storage.StorageReference;
-import com.google.firebase.storage.UploadTask;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -55,16 +36,22 @@ import java.util.Date;
 import java.util.List;
 
 
-public class TakePictureActivity extends Activity{
 
-    private static final int TAKE_PICTURE_REQUEST = 1;
+
+public class ComplicatedTakePictureActivity extends Activity {
+
+    public static float FULL_DISTANCE = 8000.0f;
     public final String TAG = "TakePictureActivity";
+
+    private SurfaceView mPreview;
+    private SurfaceHolder mPreviewHolder;
     private Camera mCamera;
     private boolean mInPreview = false;
     private boolean mCameraConfigured = false;
-    String picturePath;
+    private TextView mZoomLevelView;
 
     private GestureDetector mGestureDetector;
+    private CardBuilder cardBuilder;
     private CardScrollView mCardScroller;
     private CardAdapter mAdapter;
 
@@ -80,10 +67,13 @@ public class TakePictureActivity extends Activity{
         mCardScroller.setAdapter(mAdapter);
         setContentView(mCardScroller);
         setCardScrollerListener();
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // so screen stays bright
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // WORKS ON GLASS!
+
+
+
     }
 
-    private List<CardBuilder> createCards(Context context) { // build 2-element list of scrollable cards
+    private List<CardBuilder> createCards(Context context) {
         ArrayList<CardBuilder> cards = new ArrayList<CardBuilder>();
         cards.add(TAKE_PICTURE, new CardBuilder(context, CardBuilder.Layout.TEXT)
                 .setText("Take a photo"));
@@ -110,17 +100,27 @@ public class TakePictureActivity extends Activity{
                         // Do camera stuff here. Item 5 on paper prototype:
 
                         // setup file to save image:
-                        takePicture();
-                    break;
+                        File file = getOutputMediaFile();
 
-                    // To do: check whether picture has already been taken. For now, just call takePicture()
+
+
+
+
+
+
+
+
+
+                        break;
+
                     case SEND_TO_FIREBASE:
-                        takePicture();
+                        startActivity(new Intent(ComplicatedTakePictureActivity.this, ZoomActivity.class));
                         break;
 
                     default:
                         soundEffect = Sounds.ERROR;
                 }
+
                 // Play sound.
                 AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
                 am.playSoundEffect(soundEffect);
@@ -128,77 +128,7 @@ public class TakePictureActivity extends Activity{
         });
     }
 
-
-    // From Glass GDK Camera API (the simpler way to save pictures to glass storage):
-    private void takePicture() {
-        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        startActivityForResult(intent, TAKE_PICTURE_REQUEST);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == TAKE_PICTURE_REQUEST && resultCode == RESULT_OK) {
-            String thumbnailPath = data.getStringExtra(Intents.EXTRA_THUMBNAIL_FILE_PATH);
-            picturePath = data.getStringExtra(Intents.EXTRA_PICTURE_FILE_PATH);
-            processPictureWhenReady(picturePath);
-        }
-        super.onActivityResult(requestCode, resultCode, data);
-    }
-
-    private void processPictureWhenReady(final String picturePath) {
-        final File pictureFile = new File(picturePath);
-
-        if (pictureFile.exists()) {
-            uploadToFirebase(pictureFile);
-        } else {
-            // The file does not exist yet. Before starting the file observer, you
-            // can update your UI to let the user know that the application is
-            // waiting for the picture (for example, by displaying the thumbnail
-            // image and a progress indicator).
-
-            final File parentDirectory = pictureFile.getParentFile();
-            FileObserver observer = new FileObserver(parentDirectory.getPath(),
-                    FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO) {
-                // Protect against additional pending events after CLOSE_WRITE
-                // or MOVED_TO is handled.
-                private boolean isFileWritten;
-
-                @Override
-                public void onEvent(int event, String path) {
-                    if (!isFileWritten) {
-                        // For safety, make sure that the file that was created in
-                        // the directory is actually the one that we're expecting.
-                        File affectedFile = new File(parentDirectory, path);
-                        isFileWritten = affectedFile.equals(pictureFile);
-
-                        if (isFileWritten) {
-                            stopWatching();
-
-                            // Now that the file is ready, recursively call
-                            // processPictureWhenReady again (on the UI thread).
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    processPictureWhenReady(picturePath);
-                                }
-                            });
-                        }
-                    }
-                }
-            };
-            observer.startWatching();
-        }
-    }
-
-    public void uploadToFirebase(File pictureFile){
-        Intent i = new Intent(TakePictureActivity.this, MyUploadService.class);
-        i.putExtra("EXTRA_FILE_URL", pictureFile);
-        startActivity(i);
-    }
-
-    /** The complicated way to do it. The built-in glassware returns a file path automatically, so doesn't need this.
-
-     * Create a File for saving an image or video.  */
+    /** Create a File for saving an image or video */
     private static File getOutputMediaFile(){
         // To be safe, you should check that the SDCard is mounted
         // using Environment.getExternalStorageState() before doing this.

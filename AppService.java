@@ -17,17 +17,17 @@ public class AppService extends Service {
 
     private AppDrawer mAppDrawer; // in order to affect rendering of mLiveCard directly
     private LiveCard mLiveCard;
-    private static AppService mAppService; // only want one mAppService
+    private static AppService mAppService;
 
     public static AppService appService() {
         return mAppService;
-    } //always returns the same AppService (because it's static)
+    }
 
     @Override
     public void onCreate() {
         Log.v(TAG, "method: onCreate");
         super.onCreate();
-        mAppService = this; // only created once
+        mAppService = this;
     }
 
     @Override
